@@ -4,13 +4,16 @@ class AuthRepository {
   AuthRepository(this._apiClient);
   final ApiClient _apiClient;
 
-  Future<Map<String, dynamic>> requestOtp({
-    required String telegramId,
-    required String loginToken,
-  }) async {
+  Future<Map<String, dynamic>> startTelegramLogin() async {
     final response = await _apiClient.dio.post<Map<String, dynamic>>(
-      'auth/request-otp',
-      data: {'telegramId': telegramId, 'loginToken': loginToken},
+      'auth/telegram/start',
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> getTelegramLoginStatus(String requestId) async {
+    final response = await _apiClient.dio.get<Map<String, dynamic>>(
+      'auth/telegram/status/$requestId',
     );
     return response.data ?? <String, dynamic>{};
   }
