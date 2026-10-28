@@ -8,8 +8,11 @@ import '../controllers/login_controller.dart';
 class LoginView extends GetView<LoginController> {
   const LoginView({super.key});
 
+  static final _binding = LoginBinding();
+
   @override
   Widget build(BuildContext context) {
+    if (!Get.isRegistered<LoginController>()) _binding.dependencies();
     return Scaffold(
       appBar: AppBar(title: const Text('ورود به VPN')),
       body: SafeArea(
