@@ -19,35 +19,55 @@ class LoginView extends GetView<LoginController> {
               padding: const EdgeInsets.all(24),
               shrinkWrap: true,
               children: [
-                const Icon(Icons.shield_moon_rounded, size: 64, color: AppTheme.brand),
-                const SizedBox(height: 16),
-                const Text('ورود امن به حساب', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                const Text('کد تأیید از طریق تلگرام برای شما ارسال می‌شود.', textAlign: TextAlign.center),
+                const Icon(Icons.shield_moon_rounded, size: 72, color: AppTheme.brand),
+                const SizedBox(height: 20),
+                const Text(
+                  'ورود امن با تلگرام',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'برای ورود، ربات رسمی را باز کن و روی Start بزن. کد تأیید در تلگرام برایت ارسال می‌شود.',
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 28),
-                TextField(
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'آیدی عددی تلگرام', border: OutlineInputBorder()),
-                  onChanged: (value) => controller.telegramId.value = value,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'توکن ورود', border: OutlineInputBorder()),
-                  onChanged: (value) => controller.loginToken.value = value,
-                ),
-                const SizedBox(height: 18),
                 Obx(() {
                   final error = controller.errorMessage.value;
                   if (error.isEmpty) return const SizedBox.shrink();
-                  return Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(error, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center));
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      error,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
                 }),
-                Obx(() => FilledButton(
-                  onPressed: controller.isLoading.value ? null : controller.requestOtp,
-                  child: controller.isLoading.value
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('دریافت کد تأیید'),
+                Obx(() => FilledButton.icon(
+                  onPressed: controller.isLoading.value ? null : controller.startTelegramLogin,
+                  icon: controller.isLoading.value
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.telegram),
+                  label: Text(
+                    controller.isLoading.value
+                        ? 'در انتظار تأیید در تلگرام...'
+                        : 'ورود با تلگرام',
+                  ),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 )),
+                const SizedBox(height: 12),
+                const Text(
+                  'پس از زدن Start، به اپ برگرد تا صفحه واردکردن کد نمایش داده شود.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12),
+                ),
               ],
             ),
           ),
