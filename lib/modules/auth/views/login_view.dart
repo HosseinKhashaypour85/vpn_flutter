@@ -52,7 +52,7 @@ class LoginView extends GetView<LoginController> {
                           width: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.telegram),
+                      : const Icon(Icons.send_rounded),
                   label: Text(
                     controller.isLoading.value
                         ? 'در انتظار تأیید در تلگرام...'
