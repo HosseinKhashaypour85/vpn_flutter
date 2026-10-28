@@ -8,9 +8,6 @@ class LoginView extends GetView<LoginController> {
   const LoginView({super.key});
 
   @override
-  String? get tag => null;
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('ورود به VPN')),
