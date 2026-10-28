@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
+// ignore: implementation_imports
+import 'package:dio/src/adapters/io_adapter.dart';
 
 import '../constants/api_constants.dart';
 import '../storage/token_storage.dart';
@@ -16,6 +20,18 @@ class ApiClient {
         },
       ),
     );
+
+    assert(() {
+      dio.httpClientAdapter = IOHttpClientAdapter(
+        createHttpClient: () {
+          final client = HttpClient()..idleTimeout = const Duration(seconds: 3);
+          client.badCertificateCallback =
+              (X509Certificate cert, String host, int port) => true;
+          return client;
+        },
+      );
+      return true;
+    }());
 
     dio.interceptors.add(
       InterceptorsWrapper(

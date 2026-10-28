@@ -6,6 +6,7 @@ class AppTheme {
   static const brand = Color(0xFF10706B);
 
   static final light = ThemeData(
+    fontFamily: 'kalameh',
     useMaterial3: true,
     brightness: Brightness.light,
     scaffoldBackgroundColor: const Color(0xFFF7F8FA),
