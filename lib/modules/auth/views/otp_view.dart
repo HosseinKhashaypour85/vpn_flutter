@@ -2,17 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pinput/pinput.dart';
 
-import '../bindings/otp_binding.dart';
 import '../controllers/otp_controller.dart';
 
 class OtpView extends GetView<OtpController> {
   const OtpView({super.key});
 
-  static final _binding = OtpBinding();
-
   @override
   Widget build(BuildContext context) {
-    if (!Get.isRegistered<OtpController>()) _binding.dependencies();
     final pinController = TextEditingController();
     return Scaffold(
       appBar: AppBar(title: const Text('تأیید کد')),
