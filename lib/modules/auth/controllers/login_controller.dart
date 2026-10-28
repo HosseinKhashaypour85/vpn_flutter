@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/token_storage.dart';
@@ -18,33 +19,48 @@ class LoginController extends GetxController {
   final isLoading = false.obs;
   final errorMessage = ''.obs;
   final telegramId = ''.obs;
-  final loginToken = ''.obs;
   final challengeId = ''.obs;
 
-  Future<void> requestOtp() async {
+  Future<void> startTelegramLogin() async {
     errorMessage.value = '';
-    if (!RegExp(r'^\d{5,20}$').hasMatch(telegramId.value.trim())) {
-      errorMessage.value = 'آیدی عددی تلگرام معتبر نیست.';
-      return;
-    }
-    if (loginToken.value.trim().length < 20) {
-      errorMessage.value = 'توکن ورود باید حداقل ۲۰ کاراکتر باشد.';
-      return;
-    }
-
     isLoading.value = true;
     try {
-      final result = await _repository.requestOtp(
-        telegramId: telegramId.value.trim(),
-        loginToken: loginToken.value.trim(),
-      );
-      final id = result['challengeId']?.toString();
-      if (result['success'] != true || id == null || id.isEmpty) {
-        errorMessage.value = result['message']?.toString() ?? 'ارسال کد انجام نشد.';
+      final result = await _repository.startTelegramLogin();
+      final requestId = result['loginRequestId']?.toString();
+      final botUrl = result['botUrl']?.toString();
+      if (result['success'] != true || requestId == null || botUrl == null) {
+        errorMessage.value = result['message']?.toString() ?? 'شروع ورود تلگرامی انجام نشد.';
         return;
       }
-      challengeId.value = id;
-      Get.toNamed('/otp');
+
+      final opened = await launchUrl(
+        Uri.parse(botUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        errorMessage.value = 'تلگرام باز نشد. مطمئن شو تلگرام نصب است و دوباره تلاش کن.';
+        return;
+      }
+
+      // The user must tap Start in Telegram; the backend webhook then
+      // associates this one-time request with the Telegram account.
+      for (var attempt = 0; attempt < 75; attempt++) {
+        await Future.delayed(const Duration(seconds: 2));
+        final status = await _repository.getTelegramLoginStatus(requestId);
+        if (status['status'] == 'ready') {
+          telegramId.value = status['telegramId']?.toString() ?? '';
+          challengeId.value = status['challengeId']?.toString() ?? '';
+          if (telegramId.value.isNotEmpty && challengeId.value.isNotEmpty) {
+            Get.toNamed('/otp');
+            return;
+          }
+        }
+        if (status['status'] == 'expired') {
+          errorMessage.value = 'مهلت ورود تمام شد؛ دوباره تلاش کن.';
+          return;
+        }
+      }
+      errorMessage.value = 'هنوز شروع ربات دریافت نشده. دوباره تلاش کن و در تلگرام Start را بزن.';
     } on DioException catch (e) {
       final data = e.response?.data;
       errorMessage.value = data is Map && data['message'] != null
