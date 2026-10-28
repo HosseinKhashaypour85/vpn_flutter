@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/theme/app_theme.dart';
-import '../bindings/login_binding.dart';
 import '../controllers/login_controller.dart';
 
 class LoginView extends GetView<LoginController> {
