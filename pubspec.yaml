@@ -48,6 +48,7 @@ dependencies:
   flutter_v2ray: ^1.0.10
   pinput: ^6.0.2
   share_plus: ^13.3.1
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

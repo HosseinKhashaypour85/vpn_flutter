@@ -15,6 +15,6 @@ class AppPages {
     GetPage<void>(name: AppRoutes.splash, page: () => const SplashView()),
     GetPage<void>(name: AppRoutes.login, page: () => const LoginView(), binding: LoginBinding()),
     GetPage<void>(name: AppRoutes.otp, page: () => const OtpView(), binding: OtpBinding()),
-    GetPage<void>(name: AppRoutes.home, page: () => const HomeView()),
+    GetPage<void>(name: AppRoutes.home, page: () => const HomeScreen()),
   ];
 }
