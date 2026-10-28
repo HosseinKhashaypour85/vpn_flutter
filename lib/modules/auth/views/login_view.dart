@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/theme/app_theme.dart';
+import '../bindings/login_binding.dart';
 import '../controllers/login_controller.dart';
 
 class LoginView extends GetView<LoginController> {
   const LoginView({super.key});
 
+  static final _binding = LoginBinding();
+
   @override
   Widget build(BuildContext context) {
+    if (!Get.isRegistered<LoginController>()) _binding.dependencies();
     return Scaffold(
       appBar: AppBar(title: const Text('ورود به VPN')),
       body: SafeArea(
