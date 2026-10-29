@@ -31,6 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late final FlutterV2ray _v2ray;
   final List<String> _subscriptions = [];
   final List<VpnServer> _servers = [];
+  final Map<String, int> _serverDelays = {};
+  final Set<String> _pingingLinks = {};
 
   String? _selectedLink;
   bool _initialized = false;
@@ -247,6 +249,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
     for (final url in List<String>.from(_subscriptions)) {
       await _loadSubscription(url, refresh: true);
+    }
+  }
+
+  Future<void> _pingServer(VpnServer server) async {
+    if (_pingingLinks.contains(server.link)) return;
+
+    setState(() {
+      _pingingLinks.add(server.link);
+      _serverDelays.remove(server.link);
+    });
+
+    try {
+      final parsed = FlutterV2ray.parseFromURL(server.link);
+      parsed.dns = {
+        'servers': ['1.1.1.1', '8.8.8.8'],
+      };
+      final delay = await _v2ray
+          .getServerDelay(config: parsed.getFullConfiguration())
+          .timeout(const Duration(seconds: 20));
+
+      if (!mounted) return;
+      setState(() => _serverDelays[server.link] = delay);
+      debugPrint('VPN PING: ${server.name} = ${delay}ms');
+    } catch (e, st) {
+      debugPrint('VPN PING ERROR: ${server.name}: $e');
+      debugPrintStack(stackTrace: st);
+      if (!mounted) return;
+      setState(() => _serverDelays[server.link] = -1);
+      _showMessage('پینگ سرور ناموفق بود؛ کانفیگ یا دسترسی سرور را بررسی کن');
+    } finally {
+      if (mounted) {
+        setState(() => _pingingLinks.remove(server.link));
+      }
     }
   }
 
@@ -525,9 +560,44 @@ class _HomeScreenState extends State<HomeScreen> {
                         server.link.split('://').first.toUpperCase(),
                         style: const TextStyle(color: Colors.white54, fontSize: 11),
                       ),
-                      secondary: Icon(
-                        Icons.dns_rounded,
-                        color: isSelected ? green : Colors.white54,
+                      secondary: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_pingingLinks.contains(server.link))
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: green,
+                              ),
+                            )
+                          else
+                            Text(
+                              _serverDelays.containsKey(server.link)
+                                  ? (_serverDelays[server.link]! >= 0
+                                      ? '${_serverDelays[server.link]} ms'
+                                      : 'خطا')
+                                  : '— ms',
+                              style: TextStyle(
+                                color: _serverDelays[server.link] != null &&
+                                        _serverDelays[server.link]! >= 0
+                                    ? green
+                                    : Colors.white54,
+                                fontSize: 11,
+                              ),
+                            ),
+                          IconButton(
+                            tooltip: 'تست پینگ',
+                            onPressed: _pingingLinks.contains(server.link)
+                                ? null
+                                : () => _pingServer(server),
+                            icon: const Icon(
+                              Icons.speed_rounded,
+                              color: green,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
