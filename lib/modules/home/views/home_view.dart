@@ -38,15 +38,33 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _initialized = false;
   bool _connecting = false;
   bool _connected = false;
+  bool _testingInternet = false;
   String _status = 'در حال آماده‌سازی موتور VPN...';
+  String _trafficInfo = '';
 
   @override
   void initState() {
     super.initState();
     _v2ray = FlutterV2ray(
       onStatusChanged: (status) {
-        // لاگ وضعیت موتور برای عیب‌یابی اتصال در ترمینال.
-        debugPrint('V2RAY STATUS: $status');
+        // Log actual engine state and traffic counters; do not infer a working
+        // tunnel merely because startV2Ray() returned.
+        debugPrint(
+          'V2RAY STATUS: state=${status.state}, duration=${status.duration}, '
+          'upload=${status.upload}, download=${status.download}, '
+          'uploadSpeed=${status.uploadSpeed}, downloadSpeed=${status.downloadSpeed}',
+        );
+        if (!mounted) return;
+        setState(() {
+          _connected = status.state.toUpperCase() == 'CONNECTED';
+          _trafficInfo =
+              'آپلود: ${status.upload} B  •  دانلود: ${status.download} B';
+          if (!_connected && !_connecting) {
+            _status = 'موتور VPN متصل نیست (${status.state})';
+          } else if (_connected) {
+            _status = 'تونل فعال است؛ در حال بررسی عبور ترافیک';
+          }
+        });
       },
     );
     _initializeVpn();
@@ -285,6 +303,36 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _testTunnelInternet() async {
+    if (!_connected || _testingInternet) {
+      _showMessage('ابتدا تونل VPN را وصل کن');
+      return;
+    }
+
+    setState(() => _testingInternet = true);
+    try {
+      final response = await http
+          .get(Uri.parse('https://www.google.com/generate_204'))
+          .timeout(const Duration(seconds: 8));
+
+      if (!mounted) return;
+      if (response.statusCode == 204 || response.statusCode == 200) {
+        setState(() => _status = 'تست اینترنت موفق بود (HTTP ${response.statusCode})');
+        _showMessage('اینترنت از داخل اپ در دسترس است');
+      } else {
+        setState(() => _status = 'تست اینترنت: HTTP ${response.statusCode}');
+        _showMessage('پاسخ غیرمنتظره از اینترنت: HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('VPN TUNNEL INTERNET TEST ERROR: $e');
+      if (!mounted) return;
+      setState(() => _status = 'تونل روشن است ولی تست اینترنت ناموفق بود');
+      _showMessage('تست اینترنت ناموفق بود؛ لاگ: $e');
+    } finally {
+      if (mounted) setState(() => _testingInternet = false);
+    }
+  }
+
   Future<void> _toggleConnection() async {
     if (!_initialized || _connecting) return;
 
@@ -336,8 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
       setState(() {
-        _connected = true;
-        _status = 'درخواست اتصال ارسال شد؛ لاگ موتور را بررسی کن';
+        _status = 'درخواست اتصال ارسال شد؛ منتظر وضعیت واقعی موتور هستیم';
       });
     } catch (e, st) {
       debugPrint('VPN CONNECT ERROR: $e');
@@ -480,6 +527,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       _initialized ? 'موتور VPN آماده است' : 'در حال آماده‌سازی موتور...',
                       style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                    if (_trafficInfo.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _trafficInfo,
+                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: !_connected || _testingInternet
+                          ? null
+                          : _testTunnelInternet,
+                      icon: _testingInternet
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.public_rounded),
+                      label: const Text('تست اینترنت از داخل تونل'),
                     ),
                   ],
                 ),
