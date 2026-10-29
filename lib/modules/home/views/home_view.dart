@@ -86,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (body.isEmpty) throw const FormatException('محتوای اشتراک خالی است.');
 
     if (!body.contains('://')) {
-      final compact = body.replaceAll(RegExp(r'\\s+'), '');
+      final compact = body.replaceAll(RegExp(r'\s+'), '');
       try {
         final decoded = utf8.decode(
           base64.decode(base64.normalize(compact)),
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final links = body
-        .split(RegExp(r'[\\r\\n]+'))
+        .split(RegExp(r'[\r\n]+'))
         .map((line) => line.trim())
         .where((line) {
           final lower = line.toLowerCase();
