@@ -280,9 +280,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final parsed = FlutterV2ray.parseFromURL(server.link);
-      parsed.dns = {
-        'servers': ['1.1.1.1', '8.8.8.8'],
-      };
       final delay = await _v2ray
           .getServerDelay(config: parsed.getFullConfiguration())
           .timeout(const Duration(seconds: 20));
@@ -360,13 +357,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Use explicit public DNS resolvers instead of relying on the device DNS
       // configuration, which can fail inside some VPN tunnels.
-      parsed.dns = {
-        'servers': ['1.1.1.1', '8.8.8.8'],
-      };
       parsed.log['loglevel'] = 'warning';
 
       debugPrint('VPN CONNECT: selected server = ${server.name}');
-      debugPrint('VPN CONNECT: applying explicit DNS resolvers');
       debugPrint('VPN CONNECT: protocol = ${server.link.split('://').first}');
 
       final hasPermission = await _v2ray.requestPermission();
