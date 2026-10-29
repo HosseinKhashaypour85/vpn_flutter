@@ -1,7 +1,20 @@
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:http/http.dart' as http;
+
+class VpnServer {
+  const VpnServer({
+    required this.name,
+    required this.link,
+    required this.subscriptionUrl,
+  });
+
+  final String name;
+  final String link;
+  final String subscriptionUrl;
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,97 +29,263 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color green = Color(0xFF19C795);
 
   late final FlutterV2ray _v2ray;
-  final TextEditingController _configController =
-  TextEditingController();
+  final List<String> _subscriptions = [];
+  final List<VpnServer> _servers = [];
 
+  String? _selectedLink;
   bool _initialized = false;
   bool _connecting = false;
   bool _connected = false;
-  String _status = 'آماده اتصال';
+  String _status = 'در حال آماده‌سازی موتور VPN...';
 
   @override
   void initState() {
     super.initState();
-
     _v2ray = FlutterV2ray(
       onStatusChanged: (status) {
-        // وضعیت موتور VPN در صورت نیاز اینجا مدیریت می‌شود.
+        // لاگ وضعیت موتور برای عیب‌یابی اتصال در ترمینال.
+        debugPrint('V2RAY STATUS: $status');
       },
     );
-
     _initializeVpn();
   }
 
   Future<void> _initializeVpn() async {
     try {
       await _v2ray.initializeV2Ray();
-
       if (!mounted) return;
       setState(() {
         _initialized = true;
         _status = 'آماده اتصال';
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('V2RAY INIT ERROR: $e');
+      debugPrintStack(stackTrace: st);
       if (!mounted) return;
+      setState(() => _status = 'راه‌اندازی موتور VPN ناموفق بود');
+    }
+  }
+
+  Future<List<VpnServer>> _fetchSubscription(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null ||
+        !uri.hasAuthority ||
+        (uri.scheme != 'https' && uri.scheme != 'http')) {
+      throw const FormatException('لینک اشتراک باید با http:// یا https:// شروع شود.');
+    }
+
+    final response = await http
+        .get(uri, headers: const {'Accept': 'text/plain, */*'})
+        .timeout(const Duration(seconds: 25));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('سرور اشتراک کد HTTP ${response.statusCode} برگرداند.');
+    }
+
+    var body = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
+    if (body.isEmpty) throw const FormatException('محتوای اشتراک خالی است.');
+
+    if (!body.contains('://')) {
+      final compact = body.replaceAll(RegExp(r'\\s+'), '');
+      try {
+        final decoded = utf8.decode(
+          base64.decode(base64.normalize(compact)),
+          allowMalformed: true,
+        ).trim();
+        if (decoded.contains('://')) {
+          body = decoded;
+        } else {
+          try {
+            final urlDecoded = utf8.decode(
+              base64Url.decode(base64Url.normalize(compact)),
+              allowMalformed: true,
+            ).trim();
+            if (urlDecoded.contains('://')) body = urlDecoded;
+          } catch (_) {}
+        }
+      } catch (_) {
+        try {
+          final urlDecoded = utf8.decode(
+            base64Url.decode(base64Url.normalize(compact)),
+            allowMalformed: true,
+          ).trim();
+          if (urlDecoded.contains('://')) body = urlDecoded;
+        } catch (_) {}
+      }
+    }
+
+    final links = body
+        .split(RegExp(r'[\\r\\n]+'))
+        .map((line) => line.trim())
+        .where((line) {
+          final lower = line.toLowerCase();
+          return lower.startsWith('vless://') ||
+              lower.startsWith('vmess://') ||
+              lower.startsWith('trojan://') ||
+              lower.startsWith('ss://');
+        })
+        .toSet()
+        .toList();
+
+    if (links.isEmpty) {
+      throw const FormatException(
+        'هیچ کانفیگ VLESS، VMess، Trojan یا Shadowsocks در اشتراک پیدا نشد.',
+      );
+    }
+
+    return List<VpnServer>.generate(links.length, (index) {
+      final link = links[index];
+      var name = 'سرور ${index + 1}';
+      try {
+        final parsed = FlutterV2ray.parseFromURL(link);
+        if (parsed.remark.trim().isNotEmpty) name = parsed.remark.trim();
+      } catch (e) {
+        debugPrint('CONFIG PARSE WARNING: $e');
+      }
+      return VpnServer(
+        name: name,
+        link: link,
+        subscriptionUrl: rawUrl.trim(),
+      );
+    });
+  }
+
+  Future<void> _addSubscription() async {
+    // از TextEditingController محلی استفاده نمی‌کنیم تا هنگام خروج
+    // انیمیشنی دیالوگ، controller پیش از TextField dispose نشود.
+    var input = '';
+
+    final url = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: card,
+          title: const Text(
+            'افزودن اشتراک',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: TextField(
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            style: const TextStyle(color: Colors.white),
+            onChanged: (value) => input = value.trim(),
+            decoration: InputDecoration(
+              hintText: 'https://example.com/subscription',
+              hintStyle: const TextStyle(color: Colors.white38),
+              filled: true,
+              fillColor: bg,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('لغو'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, input),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: green,
+                foregroundColor: bg,
+              ),
+              child: const Text('دریافت سرورها'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || url == null || url.isEmpty) return;
+    await _loadSubscription(url);
+  }
+
+  Future<void> _loadSubscription(
+    String url, {
+    bool refresh = false,
+  }) async {
+    setState(() => _status = 'در حال دریافت اشتراک...');
+
+    try {
+      final fetchedServers = await _fetchSubscription(url);
+      if (!mounted) return;
+
       setState(() {
-        _status = 'راه‌اندازی موتور VPN ناموفق بود';
+        _subscriptions.remove(url);
+        _subscriptions.add(url);
+        _servers.removeWhere((server) => server.subscriptionUrl == url);
+        _servers.addAll(fetchedServers);
+
+        if (_selectedLink == null ||
+            !_servers.any((server) => server.link == _selectedLink)) {
+          _selectedLink = fetchedServers.first.link;
+        }
+        _status = '${fetchedServers.length} سرور دریافت شد';
       });
+
+      _showMessage(
+        refresh
+            ? 'اشتراک به‌روزرسانی شد'
+            : '${fetchedServers.length} سرور اضافه شد',
+      );
+    } catch (e, st) {
+      debugPrint('SUBSCRIPTION ERROR: $e');
+      debugPrintStack(stackTrace: st);
+      if (!mounted) return;
+      setState(() => _status = 'دریافت اشتراک ناموفق بود');
+      _showMessage('خطا در دریافت اشتراک: $e');
+    }
+  }
+
+  Future<void> _refreshSubscriptions() async {
+    if (_subscriptions.isEmpty) {
+      _showMessage('ابتدا روی + بزن و لینک اشتراک را اضافه کن');
+      return;
+    }
+
+    for (final url in List<String>.from(_subscriptions)) {
+      await _loadSubscription(url, refresh: true);
     }
   }
 
   Future<void> _toggleConnection() async {
-    if (_connecting || !_initialized) return;
+    if (!_initialized || _connecting) return;
 
-    if (_connected) {
-      setState(() {
-        _connecting = true;
-      });
-
-      try {
+    setState(() => _connecting = true);
+    try {
+      if (_connected) {
         await _v2ray.stopV2Ray();
-
         if (!mounted) return;
         setState(() {
           _connected = false;
           _status = 'اتصال قطع شد';
         });
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _status = 'قطع اتصال ناموفق بود';
-        });
-      } finally {
-        if (mounted) {
-          setState(() => _connecting = false);
-        }
+        return;
       }
-      return;
-    }
 
-    final link = _configController.text.trim();
+      final selected = _servers.where((server) => server.link == _selectedLink);
+      if (selected.isEmpty) {
+        _showMessage('ابتدا از طریق دکمه + یک اشتراک اضافه و سرور انتخاب کن');
+        return;
+      }
 
-    if (link.isEmpty) {
-      _showMessage('ابتدا لینک کانفیگ سرور را وارد کن');
-      return;
-    }
+      setState(() => _status = 'در حال درخواست اتصال...');
+      final server = selected.first;
+      final parsed = FlutterV2ray.parseFromURL(server.link);
 
-    setState(() {
-      _connecting = true;
-      _status = 'در حال اتصال...';
-    });
-
-    try {
-      final parser = FlutterV2ray.parseFromURL(link);
+      debugPrint('VPN CONNECT: selected server = ${server.name}');
+      debugPrint('VPN CONNECT: protocol = ${server.link.split('://').first}');
 
       final hasPermission = await _v2ray.requestPermission();
-
       if (!hasPermission) {
-        throw Exception('مجوز VPN صادر نشد');
+        throw Exception('مجوز اتصال VPN صادر نشد');
       }
 
       await _v2ray.startV2Ray(
-        remark: parser.remark,
-        config: parser.getFullConfiguration(),
+        remark: parsed.remark.isEmpty ? server.name : parsed.remark,
+        config: parsed.getFullConfiguration(),
         blockedApps: null,
         bypassSubnets: null,
         proxyOnly: false,
@@ -115,36 +294,33 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _connected = true;
-        _status = 'درخواست اتصال ارسال شد';
+        _status = 'درخواست اتصال ارسال شد؛ لاگ موتور را بررسی کن';
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('VPN CONNECT ERROR: $e');
+      debugPrintStack(stackTrace: st);
       if (!mounted) return;
       setState(() {
         _connected = false;
-        _status = 'اتصال ناموفق بود؛ کانفیگ را بررسی کن';
+        _status = 'اتصال ناموفق بود؛ جزئیات در ترمینال است';
       });
-      _showMessage('اتصال برقرار نشد. لینک سرور را بررسی کن.');
+      _showMessage('خطای اتصال: $e');
     } finally {
-      if (mounted) {
-        setState(() => _connecting = false);
-      }
+      if (mounted) setState(() => _connecting = false);
     }
   }
 
   void _showMessage(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
     );
   }
 
   @override
-  void dispose() {
-    _configController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final selected = _servers.where((server) => server.link == _selectedLink);
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -153,7 +329,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListView(
             padding: const EdgeInsets.all(22),
             children: [
-              // Header
               Row(
                 children: [
                   Container(
@@ -162,11 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: green.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(
-                      Icons.shield_rounded,
-                      color: green,
-                      size: 28,
-                    ),
+                    child: const Icon(Icons.shield_rounded, color: green, size: 28),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -184,45 +355,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         SizedBox(height: 4),
                         Text(
                           'اتصال امن و خصوصی',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    onPressed: () {
-                      _showMessage('تنظیمات به‌زودی اضافه می‌شود');
-                    },
-                    icon: const Icon(
-                      Icons.settings_outlined,
-                      color: Colors.white70,
-                    ),
+                    onPressed: _refreshSubscriptions,
+                    tooltip: 'به‌روزرسانی اشتراک‌ها',
+                    icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
                   ),
                 ],
               ),
-
-              const SizedBox(height: 36),
-
-              // Connection card
+              const SizedBox(height: 28),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 28,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
                 decoration: BoxDecoration(
                   color: card,
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
                 ),
                 child: Column(
                   children: [
                     Text(
-                      _connected ? 'متصل هستی' : 'محافظت از اتصال',
+                      _connected ? 'درخواست اتصال ارسال شد' : 'اتصال امن',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 21,
@@ -233,200 +389,149 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text(
                       _status,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white60,
-                        fontSize: 13,
-                      ),
+                      style: const TextStyle(color: Colors.white60, fontSize: 13),
                     ),
-                    const SizedBox(height: 30),
-
-                    // Connect button
+                    const SizedBox(height: 28),
                     GestureDetector(
                       onTap: _toggleConnection,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
-                        width: 170,
-                        height: 170,
+                        width: 160,
+                        height: 160,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: (_connected ? green : Colors.white)
-                              .withValues(alpha: 0.06),
+                          color: green.withValues(alpha: 0.07),
                           border: Border.all(
-                            color: _connected
-                                ? green
-                                : Colors.white24,
-                            width: 2,
+                            color: _connected ? green : Colors.white24,
+                            width: 3,
                           ),
                           boxShadow: _connected
                               ? [
-                            BoxShadow(
-                              color: green.withValues(alpha: 0.18),
-                              blurRadius: 35,
-                              spreadRadius: 5,
-                            ),
-                          ]
+                                  BoxShadow(
+                                    color: green.withValues(alpha: 0.18),
+                                    blurRadius: 35,
+                                    spreadRadius: 5,
+                                  ),
+                                ]
                               : [],
                         ),
                         child: Center(
                           child: _connecting
-                              ? const CircularProgressIndicator(
-                            color: green,
-                          )
+                              ? const CircularProgressIndicator(color: green)
                               : Icon(
-                            Icons.power_settings_new_rounded,
-                            size: 76,
-                            color: _connected
-                                ? green
-                                : Colors.white70,
-                          ),
+                                  _connected
+                                      ? Icons.shield_rounded
+                                      : Icons.power_settings_new_rounded,
+                                  size: 76,
+                                  color: _connected ? green : Colors.white70,
+                                ),
                         ),
                       ),
                     ),
-
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
                     Text(
                       _connected ? 'قطع اتصال' : 'اتصال به VPN',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     Text(
-                      _initialized
-                          ? 'برای شروع، دکمه بالا را لمس کن'
-                          : 'در حال راه‌اندازی موتور VPN...',
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 12,
-                      ),
+                      _initialized ? 'موتور VPN آماده است' : 'در حال آماده‌سازی موتور...',
+                      style: const TextStyle(color: Colors.white38, fontSize: 12),
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 26),
-
-              // Config input
-              const Text(
-                'کانفیگ سرور',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'سرورها و اشتراک‌ها',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton.filled(
+                    onPressed: _connecting || _connected ? null : _addSubscription,
+                    tooltip: 'افزودن لینک اشتراک',
+                    style: IconButton.styleFrom(
+                      backgroundColor: green,
+                      foregroundColor: bg,
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 28),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: card,
-                  borderRadius: BorderRadius.circular(18),
+              if (_servers.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: card,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.dns_outlined, color: Colors.white38, size: 38),
+                      SizedBox(height: 10),
+                      Text('هنوز سروری اضافه نشده', style: TextStyle(color: Colors.white)),
+                      SizedBox(height: 6),
+                      Text(
+                        'روی + بزن و لینک اشتراکت را وارد کن',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'لینک VLESS یا VMess',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
+              ..._servers.map((server) {
+                final isSelected = server.link == _selectedLink;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected ? green : Colors.transparent,
+                    ),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    clipBehavior: Clip.antiAlias,
+                    child: RadioListTile<String>(
+                      value: server.link,
+                      groupValue: _selectedLink,
+                      onChanged: _connected || _connecting
+                          ? null
+                          : (value) => setState(() => _selectedLink = value),
+                      activeColor: green,
+                      title: Text(
+                        server.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        server.link.split('://').first.toUpperCase(),
+                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
+                      secondary: Icon(
+                        Icons.dns_rounded,
+                        color: isSelected ? green : Colors.white54,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _configController,
-                      enabled: !_connected && !_connecting,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'vless://... یا vmess://...',
-                        hintStyle: const TextStyle(
-                          color: Colors.white30,
-                        ),
-                        filled: true,
-                        fillColor: bg,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final data = await Clipboard.getData(
-                            'text/plain',
-                          );
-                          if (data?.text != null && mounted) {
-                            _configController.text =
-                                data!.text!.trim();
-                          }
-                        },
-                        icon: const Icon(Icons.content_paste_rounded),
-                        label: const Text('چسباندن لینک کانفیگ'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: green,
-                          side: const BorderSide(color: green),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
+                );
+              }),
+              if (selected.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'سرور انتخاب‌شده: ${selected.first.name}',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
                 ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Account info
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: card,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.data_usage_rounded,
-                      color: green,
-                      size: 28,
-                    ),
-                    SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'مصرف اینترنت',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            'پس از اتصال آمار مصرف را از API می‌گیریم',
-                            style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ],
           ),
         ),
