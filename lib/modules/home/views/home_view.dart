@@ -124,31 +124,94 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _saveSubscriptions() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('vpn_subscriptions', List<String>.from(_subscriptions));
-    await prefs.setString('selected_vpn_server', _selectedLink ?? '');
+
+    await prefs.setStringList(
+      'vpn_subscriptions',
+      List<String>.from(_subscriptions),
+    );
+
+    await prefs.setString(
+      'selected_vpn_server',
+      _selectedLink ?? '',
+    );
+
     await prefs.setString('vpn_theme_mode', _themeMode);
+
+    // ذخیره خود کانفیگ سرورها برای استفاده آفلاین
+    final cachedServers = _servers.map((server) {
+      return {
+        'name': server.name,
+        'link': server.link,
+        'subscriptionUrl': server.subscriptionUrl,
+      };
+    }).toList();
+
+    await prefs.setString(
+      'vpn_cached_servers',
+      jsonEncode(cachedServers),
+    );
   }
 
   Future<void> _restoreSavedData() async {
     final prefs = await SharedPreferences.getInstance();
+
     final savedTheme = prefs.getString('vpn_theme_mode') ?? 'dark';
     final savedUrls = prefs.getStringList('vpn_subscriptions') ?? [];
     final savedLink = prefs.getString('selected_vpn_server');
+    final cachedJson = prefs.getString('vpn_cached_servers');
 
     AppColors.applyTheme(savedTheme);
-    if (mounted) setState(() => _themeMode = savedTheme);
 
+    // ابتدا سرورهای ذخیره‌شده را بازیابی کن
+    if (cachedJson != null) {
+      try {
+        final List<dynamic> cached = jsonDecode(cachedJson);
+
+        final restoredServers = cached.map((item) {
+          return VpnServer(
+            name: item['name'],
+            link: item['link'],
+            subscriptionUrl: item['subscriptionUrl'],
+          );
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _themeMode = savedTheme;
+            _servers
+              ..clear()
+              ..addAll(restoredServers);
+
+            if (savedLink != null &&
+                _servers.any((s) => s.link == savedLink)) {
+              _selectedLink = savedLink;
+            } else if (_servers.isNotEmpty) {
+              _selectedLink = _servers.first.link;
+            }
+
+            _status = _servers.isNotEmpty
+                ? '${_servers.length} سرور از حافظه بازیابی شد'
+                : 'آماده اتصال';
+          });
+        }
+      } catch (e) {
+        debugPrint('CACHE RESTORE ERROR: $e');
+      }
+    } else if (mounted) {
+      setState(() => _themeMode = savedTheme);
+    }
+
+    // سپس تلاش برای به‌روزرسانی از اینترنت
     for (final url in savedUrls) {
-      await _loadSubscription(url, refresh: true, silent: true);
+      await _loadSubscription(
+        url,
+        refresh: true,
+        silent: true,
+      );
     }
 
     if (!mounted) return;
-    setState(() {
-      if (savedLink != null && savedLink.isNotEmpty &&
-          _servers.any((server) => server.link == savedLink)) {
-        _selectedLink = savedLink;
-      }
-    });
+
     await _saveSubscriptions();
   }
 
@@ -230,11 +293,17 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final response = await http
-        .get(uri, headers: {'Accept': 'text/plain, */*', 'User-Agent': 'v2rayNG/1.9.0'})
+        .get(uri, headers: {'Accept': 'text/plain, */*'})
         .timeout(Duration(seconds: 25));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('سرور اشتراک کد HTTP ${response.statusCode} برگرداند.');
+      debugPrint('SUBSCRIPTION HTTP ERROR: ${response.statusCode}');
+      debugPrint(
+        'SUBSCRIPTION CONTENT-TYPE: ${response.headers['content-type']}',
+      );
+      debugPrint('SUBSCRIPTION ERROR BODY LENGTH: ${response.bodyBytes.length}');
+
+      throw Exception('خطای سرور اشتراک: HTTP ${response.statusCode}');
     }
 
     var body = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
@@ -450,27 +519,40 @@ class _HomeScreenState extends State<HomeScreen>
     await _loadSubscription(url);
   }
 
-  Future<void> _loadSubscription(String url, {bool refresh = false, bool silent = false}) async {
-    setState(() => _status = 'در حال دریافت اشتراک...');
+  Future<void> _loadSubscription(
+      String url, {
+        bool refresh = false,
+        bool silent = false,
+      }) async {
+    if (mounted) {
+      setState(() => _status = 'در حال دریافت اشتراک...');
+    }
 
     try {
       final fetchedServers = await _fetchSubscription(url);
+
       if (!mounted) return;
 
       setState(() {
         _subscriptions.remove(url);
         _subscriptions.add(url);
-        _servers.removeWhere((server) => server.subscriptionUrl == url);
+
+        _servers.removeWhere(
+              (server) => server.subscriptionUrl == url,
+        );
+
         _servers.addAll(fetchedServers);
 
         if (_selectedLink == null ||
-            !_servers.any((server) => server.link == _selectedLink)) {
+            !_servers.any((s) => s.link == _selectedLink)) {
           _selectedLink = fetchedServers.first.link;
         }
+
         _status = '${fetchedServers.length} سرور دریافت شد';
       });
 
       await _saveSubscriptions();
+
       if (!silent) {
         _showMessage(
           refresh
@@ -481,9 +563,18 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e, st) {
       debugPrint('SUBSCRIPTION ERROR: $e');
       debugPrintStack(stackTrace: st);
+
       if (!mounted) return;
-      setState(() => _status = 'دریافت اشتراک ناموفق بود');
-      _showMessage('خطا در دریافت اشتراک: $e');
+
+      setState(() {
+        _status = _servers.isNotEmpty
+            ? 'استفاده از سرورهای ذخیره‌شده'
+            : 'دریافت اشتراک ناموفق بود';
+      });
+
+      if (!silent) {
+        _showMessage('خطا در دریافت اشتراک: $e');
+      }
     }
   }
 
