@@ -31,40 +31,20 @@ class _HomeScreenState extends State<HomeScreen> {
   late final FlutterV2ray _v2ray;
   final List<String> _subscriptions = [];
   final List<VpnServer> _servers = [];
-  final Map<String, int> _serverDelays = {};
-  final Set<String> _pingingLinks = {};
 
   String? _selectedLink;
   bool _initialized = false;
   bool _connecting = false;
   bool _connected = false;
-  bool _testingInternet = false;
   String _status = 'در حال آماده‌سازی موتور VPN...';
-  String _trafficInfo = '';
 
   @override
   void initState() {
     super.initState();
     _v2ray = FlutterV2ray(
       onStatusChanged: (status) {
-        // Log actual engine state and traffic counters; do not infer a working
-        // tunnel merely because startV2Ray() returned.
-        debugPrint(
-          'V2RAY STATUS: state=${status.state}, duration=${status.duration}, '
-          'upload=${status.upload}, download=${status.download}, '
-          'uploadSpeed=${status.uploadSpeed}, downloadSpeed=${status.downloadSpeed}',
-        );
-        if (!mounted) return;
-        setState(() {
-          _connected = status.state.toUpperCase() == 'CONNECTED';
-          _trafficInfo =
-              'آپلود: ${status.upload} B  •  دانلود: ${status.download} B';
-          if (!_connected && !_connecting) {
-            _status = 'موتور VPN متصل نیست (${status.state})';
-          } else if (_connected) {
-            _status = 'تونل فعال است؛ در حال بررسی عبور ترافیک';
-          }
-        });
+        // لاگ وضعیت موتور برای عیب‌یابی اتصال در ترمینال.
+        debugPrint('V2RAY STATUS: $status');
       },
     );
     _initializeVpn();
@@ -270,71 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _pingServer(VpnServer server) async {
-    if (_pingingLinks.contains(server.link)) return;
-
-    setState(() {
-      _pingingLinks.add(server.link);
-      _serverDelays.remove(server.link);
-    });
-
-    try {
-      final parsed = FlutterV2ray.parseFromURL(server.link);
-      final config = jsonDecode(parsed.getFullConfiguration());
-      final outbound = (config['outbounds'] as List)
-          .firstWhere((item) => item['protocol'] == 'vless');
-
-      debugPrint('VLESS STREAM: ${jsonEncode(outbound['streamSettings'])}');
-      final delay = await _v2ray
-          .getServerDelay(config: parsed.getFullConfiguration())
-          .timeout(const Duration(seconds: 20));
-
-      if (!mounted) return;
-      setState(() => _serverDelays[server.link] = delay);
-      debugPrint('VPN PING: ${server.name} = ${delay}ms');
-    } catch (e, st) {
-      debugPrint('VPN PING ERROR: ${server.name}: $e');
-      debugPrintStack(stackTrace: st);
-      if (!mounted) return;
-      setState(() => _serverDelays[server.link] = -1);
-      _showMessage('پینگ سرور ناموفق بود؛ کانفیگ یا دسترسی سرور را بررسی کن');
-    } finally {
-      if (mounted) {
-        setState(() => _pingingLinks.remove(server.link));
-      }
-    }
-  }
-
-  Future<void> _testTunnelInternet() async {
-    if (!_connected || _testingInternet) {
-      _showMessage('ابتدا تونل VPN را وصل کن');
-      return;
-    }
-
-    setState(() => _testingInternet = true);
-    try {
-      final response = await http
-          .get(Uri.parse('https://www.google.com/generate_204'))
-          .timeout(const Duration(seconds: 8));
-
-      if (!mounted) return;
-      if (response.statusCode == 204 || response.statusCode == 200) {
-        setState(() => _status = 'تست اینترنت موفق بود (HTTP ${response.statusCode})');
-        _showMessage('اینترنت از داخل اپ در دسترس است');
-      } else {
-        setState(() => _status = 'تست اینترنت: HTTP ${response.statusCode}');
-        _showMessage('پاسخ غیرمنتظره از اینترنت: HTTP ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('VPN TUNNEL INTERNET TEST ERROR: $e');
-      if (!mounted) return;
-      setState(() => _status = 'تونل روشن است ولی تست اینترنت ناموفق بود');
-      _showMessage('تست اینترنت ناموفق بود؛ لاگ: $e');
-    } finally {
-      if (mounted) setState(() => _testingInternet = false);
-    }
-  }
-
   Future<void> _toggleConnection() async {
     if (!_initialized || _connecting) return;
 
@@ -359,15 +274,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _status = 'در حال درخواست اتصال...');
       final server = selected.first;
       final parsed = FlutterV2ray.parseFromURL(server.link);
-      final config = jsonDecode(parsed.getFullConfiguration());
-      final outbound = (config['outbounds'] as List)
-          .firstWhere((item) => item['protocol'] == 'vless');
-
-      debugPrint('VLESS STREAM: ${jsonEncode(outbound['streamSettings'])}');
-
-      // Use explicit public DNS resolvers instead of relying on the device DNS
-      // configuration, which can fail inside some VPN tunnels.
-      parsed.log['loglevel'] = 'debug';
 
       debugPrint('VPN CONNECT: selected server = ${server.name}');
       debugPrint('VPN CONNECT: protocol = ${server.link.split('://').first}');
@@ -381,13 +287,14 @@ class _HomeScreenState extends State<HomeScreen> {
         remark: parsed.remark.isEmpty ? server.name : parsed.remark,
         config: parsed.getFullConfiguration(),
         blockedApps: null,
-        bypassSubnets: const [],
+        bypassSubnets: null,
         proxyOnly: false,
       );
 
       if (!mounted) return;
       setState(() {
-        _status = 'درخواست اتصال ارسال شد؛ منتظر وضعیت واقعی موتور هستیم';
+        _connected = true;
+        _status = 'درخواست اتصال ارسال شد؛ لاگ موتور را بررسی کن';
       });
     } catch (e, st) {
       debugPrint('VPN CONNECT ERROR: $e');
@@ -531,27 +438,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       _initialized ? 'موتور VPN آماده است' : 'در حال آماده‌سازی موتور...',
                       style: const TextStyle(color: Colors.white38, fontSize: 12),
                     ),
-                    if (_trafficInfo.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _trafficInfo,
-                        style: const TextStyle(color: Colors.white54, fontSize: 11),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: !_connected || _testingInternet
-                          ? null
-                          : _testTunnelInternet,
-                      icon: _testingInternet
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.public_rounded),
-                      label: const Text('تست اینترنت از داخل تونل'),
-                    ),
                   ],
                 ),
               ),
@@ -631,44 +517,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         server.link.split('://').first.toUpperCase(),
                         style: const TextStyle(color: Colors.white54, fontSize: 11),
                       ),
-                      secondary: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_pingingLinks.contains(server.link))
-                            const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: green,
-                              ),
-                            )
-                          else
-                            Text(
-                              _serverDelays.containsKey(server.link)
-                                  ? (_serverDelays[server.link]! >= 0
-                                      ? '${_serverDelays[server.link]} ms'
-                                      : 'خطا')
-                                  : '— ms',
-                              style: TextStyle(
-                                color: _serverDelays[server.link] != null &&
-                                        _serverDelays[server.link]! >= 0
-                                    ? green
-                                    : Colors.white54,
-                                fontSize: 11,
-                              ),
-                            ),
-                          IconButton(
-                            tooltip: 'تست پینگ',
-                            onPressed: _pingingLinks.contains(server.link)
-                                ? null
-                                : () => _pingServer(server),
-                            icon: const Icon(
-                              Icons.speed_rounded,
-                              color: green,
-                            ),
-                          ),
-                        ],
+                      secondary: Icon(
+                        Icons.dns_rounded,
+                        color: isSelected ? green : Colors.white54,
                       ),
                     ),
                   ),
