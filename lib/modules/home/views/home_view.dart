@@ -54,6 +54,17 @@ class AppColors {
       textPrimary = Colors.white;
       textSecondary = Color(0xFFE0E0E0);
       textMuted = Color(0xFF9E9E9E);
+    } else if (mode == 'simurgh') {
+      bg = Color(0xFF130D25);
+      bg2 = Color(0xFF21152F);
+      card = Color(0xFF2B1B39);
+      cardLight = Color(0xFF422747);
+      green = Color(0xFFF28D5B);
+      greenSoft = Color(0xFFBD3C1D);
+      red = Color(0xFFE56B62);
+      textPrimary = Color(0xFFFFF8F0);
+      textSecondary = Color(0xFFF4DCCB);
+      textMuted = Color(0xFFBDA5B8);
     } else {
       bg = Color(0xFF071219);
       bg2 = Color(0xFF0B2025);
@@ -321,6 +332,7 @@ class _HomeScreenState extends State<HomeScreen>
               _themeOption(dialogSetState, 'dark', 'تیره', Icons.dark_mode_outlined),
               _themeOption(dialogSetState, 'light', 'روشن', Icons.light_mode_outlined),
               _themeOption(dialogSetState, 'mono', 'سیاه و سفید', Icons.contrast_rounded),
+              _themeOption(dialogSetState, 'simurgh', 'سیمرغ', Icons.local_fire_department_rounded),
             ],
           ),
           actions: [
