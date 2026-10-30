@@ -230,61 +230,100 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final response = await http
-        .get(uri, headers: {'Accept': 'text/plain, */*'})
-        .timeout(Duration(seconds: 25));
+        .get(
+          uri,
+          headers: {
+            'Accept': 'text/plain, */*',
+            'Cache-Control': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 Flutter VPN Client',
+          },
+        )
+        .timeout(const Duration(seconds: 25));
+
+    debugPrint('SUBSCRIPTION HTTP: ${response.statusCode}');
+    debugPrint(
+      'SUBSCRIPTION CONTENT-TYPE: ${response.headers['content-type'] ?? 'unknown'}',
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('سرور اشتراک کد HTTP ${response.statusCode} برگرداند.');
     }
 
-    var body = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
-    if (body.isEmpty) throw FormatException('محتوای اشتراک خالی است.');
+    final responseBody =
+        utf8.decode(response.bodyBytes, allowMalformed: true).trim();
+    if (responseBody.isEmpty) {
+      throw FormatException('سرور محتوای خالی برگرداند.');
+    }
 
-    if (!body.contains('://')) {
-      final compact = body.replaceAll(RegExp(r'\s+'), '');
+    // بعضی سرویس‌ها لینک‌ها را مستقیم و بعضی به‌صورت Base64/Base64URL می‌فرستند.
+    // چند نمایش احتمالی محتوا را بررسی می‌کنیم و لینک‌ها را از داخل متن استخراج می‌کنیم.
+    final candidates = <String>[responseBody];
+
+    final urlDecoded = Uri.decodeComponent(responseBody);
+    if (urlDecoded != responseBody) candidates.add(urlDecoded);
+
+    final compact = responseBody.replaceAll(RegExp(r'\s+'), '');
+    if (compact.length >= 8) {
+      final normalized = compact
+          .replaceAll('-', '+')
+          .replaceAll('_', '/');
+      final padded = normalized.padRight(
+        normalized.length + ((4 - normalized.length % 4) % 4),
+        '=',
+      );
+
       try {
         final decoded = utf8.decode(
-          base64.decode(base64.normalize(compact)),
+          base64.decode(padded),
           allowMalformed: true,
         ).trim();
-        if (decoded.contains('://')) {
-          body = decoded;
-        } else {
-          try {
-            final urlDecoded = utf8.decode(
-              base64Url.decode(base64Url.normalize(compact)),
-              allowMalformed: true,
-            ).trim();
-            if (urlDecoded.contains('://')) body = urlDecoded;
-          } catch (_) {}
-        }
+        if (decoded.isNotEmpty) candidates.add(decoded);
       } catch (_) {
-        try {
-          final urlDecoded = utf8.decode(
-            base64Url.decode(base64Url.normalize(compact)),
-            allowMalformed: true,
-          ).trim();
-          if (urlDecoded.contains('://')) body = urlDecoded;
-        } catch (_) {}
+        // پاسخ ممکن است اصلاً Base64 نباشد.
       }
     }
 
-    final links = body
-        .split(RegExp(r'[\r\n]+'))
-        .map((line) => line.trim())
-        .where((line) {
-      final lower = line.toLowerCase();
-      return lower.startsWith('vless://') ||
-          lower.startsWith('vmess://') ||
-          lower.startsWith('trojan://') ||
-          lower.startsWith('ss://');
-    })
-        .toSet()
-        .toList();
+    final linkPattern = RegExp(
+      r'(?:vless|vmess|trojan|ss)://[^\s<>"\x27]+',
+      caseSensitive: false,
+    );
+    final foundLinks = <String>{};
+
+    for (final candidate in candidates) {
+      for (final match in linkPattern.allMatches(candidate)) {
+        var link = match.group(0)!.trim();
+        link = link.replaceFirst(RegExp(r'[,;)\]}]+$'), '');
+        if (link.isEmpty) continue;
+
+        final lower = link.toLowerCase();
+        if (lower.startsWith('vless://') ||
+            lower.startsWith('vmess://') ||
+            lower.startsWith('trojan://') ||
+            lower.startsWith('ss://')) {
+          foundLinks.add(link);
+        }
+      }
+
+      if (foundLinks.isNotEmpty) break;
+    }
+
+    final links = foundLinks.toList();
 
     if (links.isEmpty) {
+      final contentType = response.headers['content-type'] ?? '';
+      if (contentType.contains('text/html') ||
+          responseBody.toLowerCase().contains('<html')) {
+        throw FormatException(
+          'سرور به‌جای اشتراک، صفحه HTML برگرداند. احتمالاً لینک اشتراک یا دسترسی آن نیاز به بررسی دارد.',
+        );
+      }
+
+      final preview = responseBody.length > 180
+          ? '${responseBody.substring(0, 180)}...'
+          : responseBody;
+      debugPrint('SUBSCRIPTION BODY PREVIEW: $preview');
       throw FormatException(
-        'هیچ کانفیگ VLESS، VMess، Trojan یا Shadowsocks در اشتراک پیدا نشد.',
+        'پاسخ دریافت شد اما لینک کانفیگ پیدا نشد. فرمت خروجی اشتراک را بررسی کن.',
       );
     }
 
@@ -297,7 +336,11 @@ class _HomeScreenState extends State<HomeScreen>
       } catch (e) {
         debugPrint('CONFIG PARSE WARNING: $e');
       }
-      return VpnServer(name: name, link: link, subscriptionUrl: rawUrl.trim());
+      return VpnServer(
+        name: name,
+        link: link,
+        subscriptionUrl: rawUrl.trim(),
+      );
     });
   }
 
