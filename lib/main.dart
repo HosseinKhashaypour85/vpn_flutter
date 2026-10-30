@@ -15,7 +15,7 @@ Future<void> main() async {
       minimumSize: Size(390, 500),
       maximumSize: Size(390, 500),
       center: true,
-      title: 'Simurgh VPN',
+      title: 'Simorq VPN',
     );
 
     await windowManager.waitUntilReadyToShow(
