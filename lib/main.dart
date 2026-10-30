@@ -11,11 +11,11 @@ Future<void> main() async {
     await windowManager.ensureInitialized();
 
     const windowOptions = WindowOptions(
-      size: Size(390, 500),
-      minimumSize: Size(390, 500),
-      maximumSize: Size(390, 500),
+      size: Size(1180, 800),
+      minimumSize: Size(920, 680),
       center: true,
-      title: 'Simorq VPN',
+      title: 'Simorgh VPN',
+      backgroundColor: Color(0xFF160709),
     );
 
     await windowManager.waitUntilReadyToShow(
