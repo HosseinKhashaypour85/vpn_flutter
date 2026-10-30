@@ -370,7 +370,10 @@ class _HomeScreenState extends State<HomeScreen>
       await controller.initialize();
       await controller.setLooping(false);
       await controller.setVolume(0);
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        if (_connected) await _playConnectVideo();
+      }
     } catch (e) {
       debugPrint('SIMURGH VIDEO INIT ERROR: $e');
       await controller.dispose();
