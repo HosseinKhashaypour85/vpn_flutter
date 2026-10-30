@@ -1381,7 +1381,7 @@ class _HomeScreenState extends State<HomeScreen>
       for (final alias in entry.value) {
         // کدهای دوحرفی فقط به‌صورت توکن مستقل یا همراه شماره پذیرفته می‌شوند.
         final pattern = alias.length == 2
-            ? RegExp('(^|[\\\\s._-])${RegExp.escape(alias)}([\\\\s._-]|[0-9]|$)', caseSensitive: false)
+            ? RegExp('(^|[\\s._-])${RegExp.escape(alias)}([\\s._-]|[0-9]|$)', caseSensitive: false)
             : RegExp('(^|[^a-z0-9])${RegExp.escape(alias)}([^a-z0-9]|$)', caseSensitive: false);
         if (pattern.hasMatch(searchable)) return entry.key;
       }
