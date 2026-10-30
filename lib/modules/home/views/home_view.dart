@@ -87,6 +87,95 @@ class _HomeScreenState extends State<HomeScreen>
   bool _connecting = false;
   bool _connected = false;
   String _status = 'در حال آماده‌سازی موتور VPN...';
+  // Ping state: null means not tested, -1 means failed/unreachable.
+  final Map<String, int> _serverPings = {};
+  final Set<String> _pingingServers = <String>{};
+  bool _pingingAll = false;
+
+  static const String _pingTestUrl = 'https://www.gstatic.com/generate_204';
+
+  Color _pingColor(int? ms) {
+    if (ms == null) return AppColors.textMuted;
+    if (ms < 0) return AppColors.red;
+    if (ms <= 150) return AppColors.green;
+    if (ms <= 300) return const Color(0xFFFFC857);
+    return AppColors.red;
+  }
+
+  Future<int> _measureServerPing(VpnServer server) async {
+    final parsed = FlutterV2ray.parseFromURL(server.link);
+    return _v2ray.getServerDelay(
+      config: parsed.getFullConfiguration(),
+      url: _pingTestUrl,
+    ).timeout(const Duration(seconds: 20));
+  }
+
+  Future<void> _pingSingleServer(VpnServer server) async {
+    if (!_initialized || _pingingAll || _pingingServers.contains(server.link)) {
+      return;
+    }
+
+    setState(() => _pingingServers.add(server.link));
+    try {
+      final delay = await _measureServerPing(server);
+      if (!mounted) return;
+      setState(() => _serverPings[server.link] = delay >= 0 ? delay : -1);
+    } catch (e) {
+      debugPrint('PING ERROR [${server.name}]: $e');
+      if (!mounted) return;
+      setState(() => _serverPings[server.link] = -1);
+    } finally {
+      if (mounted) setState(() => _pingingServers.remove(server.link));
+    }
+  }
+
+  Future<void> _pingAllServers() async {
+    if (!_initialized || _pingingAll || _pingingServers.isNotEmpty || _servers.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _pingingAll = true;
+      _serverPings.clear();
+    });
+
+    try {
+      // Limit concurrency to avoid overwhelming the device/core with many probes.
+      const batchSize = 3;
+      final servers = List<VpnServer>.from(_servers);
+      for (var i = 0; i < servers.length; i += batchSize) {
+        if (!mounted) return;
+        final batch = servers.skip(i).take(batchSize).toList();
+        setState(() {
+          _pingingServers.addAll(batch.map((server) => server.link));
+        });
+
+        await Future.wait(batch.map((server) async {
+          try {
+            final delay = await _measureServerPing(server);
+            if (!mounted) return;
+            setState(() => _serverPings[server.link] = delay >= 0 ? delay : -1);
+          } catch (e) {
+            debugPrint('PING ERROR [${server.name}]: $e');
+            if (!mounted) return;
+            setState(() => _serverPings[server.link] = -1);
+          } finally {
+            if (mounted) {
+              setState(() => _pingingServers.remove(server.link));
+            }
+          }
+        }));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _pingingAll = false;
+          _pingingServers.clear();
+        });
+      }
+    }
+  }
+
 
   // انیمیشن پالس دور دکمه اتصال
   late final AnimationController _pulseController;
@@ -800,11 +889,45 @@ class _HomeScreenState extends State<HomeScreen>
 
                 if (_servers.isEmpty)
                   _buildEmptyServers()
-                else
+                else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'پینگ سرورها',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _pingingAll || _pingingServers.isNotEmpty || !_initialized
+                            ? null
+                            : _pingAllServers,
+                        icon: _pingingAll
+                            ? SizedBox(
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.green,
+                                ),
+                              )
+                            : Icon(Icons.speed_rounded, size: 18),
+                        label: Text(_pingingAll ? 'در حال تست...' : 'تست همه'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.green,
+                        ),
+                      ),
+                    ],
+                  ),
                   ...List.generate(_servers.length, (index) {
                     final server = _servers[index];
                     return _buildServerTile(server, index);
                   }),
+                ],
 
                 if (selected != null) ...[
                   SizedBox(height: 10),
@@ -1127,6 +1250,36 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------- ردیف سرور ----------
+
+  Widget _buildPingIndicator(VpnServer server) {
+    final ping = _serverPings[server.link];
+    final isLoading = _pingingServers.contains(server.link);
+
+    return Container(
+      constraints: const BoxConstraints(minWidth: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: BoxDecoration(
+        color: _pingColor(ping).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        isLoading
+            ? '...'
+            : ping == null
+                ? '--'
+                : ping < 0
+                    ? 'خطا'
+                    : '${ping} ms',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: _pingColor(ping),
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Widget _buildServerTile(VpnServer server, int index) {
     final isSelected = server.link == _selectedLink;
     final protocol = server.link.split('://').first.toUpperCase();
@@ -1233,7 +1386,29 @@ class _HomeScreenState extends State<HomeScreen>
                       ],
                     ),
                   ),
-                  SizedBox(width: 10),
+                  SizedBox(width: 8),
+                  _buildPingIndicator(server),
+                  SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'تست پینگ این سرور',
+                    onPressed: !_initialized || _pingingAll || _pingingServers.contains(server.link)
+                        ? null
+                        : () => _pingSingleServer(server),
+                    icon: _pingingServers.contains(server.link)
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.green,
+                            ),
+                          )
+                        : Icon(
+                            Icons.refresh_rounded,
+                            size: 19,
+                            color: AppColors.textSecondary,
+                          ),
+                  ),
                   // نشانگر انتخاب
                   AnimatedContainer(
                     duration: Duration(milliseconds: 200),
