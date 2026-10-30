@@ -1335,9 +1335,64 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  String? _countryFlagForServer(VpnServer server) {
+    // اگر خود نام سرور از قبل ایموجی پرچم داشته باشد، همان را حفظ کن.
+    final existingFlag = RegExp(r'[\\u{1F1E6}-\\u{1F1FF}]{2}', unicode: true)
+        .firstMatch(server.name);
+    if (existingFlag != null) return existingFlag.group(0);
+
+    const aliases = <String, List<String>>{
+      '🇩🇪': ['germany', 'deutschland', 'آلمان'],
+      '🇳🇱': ['netherlands', 'holland', 'nl', 'هلند'],
+      '🇫🇷': ['france', 'فرانسه'],
+      '🇬🇧': ['uk', 'united kingdom', 'britain', 'england', 'انگلیس', 'بریتانیا'],
+      '🇺🇸': ['usa', 'us', 'united states', 'america', 'آمریکا'],
+      '🇨🇦': ['canada', 'کانادا'],
+      '🇫🇮': ['finland', 'فنلاند'],
+      '🇸🇪': ['sweden', 'سوئد'],
+      '🇨🇭': ['switzerland', 'سوئیس'],
+      '🇹🇷': ['turkey', 'turkiye', 'ترکیه'],
+      '🇷🇺': ['russia', 'روسیه'],
+      '🇯🇵': ['japan', 'ژاپن'],
+      '🇸🇬': ['singapore', 'سنگاپور'],
+      '🇦🇪': ['uae', 'emirates', 'امارات'],
+      '🇮🇷': ['iran', 'ایران'],
+      '🇵🇱': ['poland', 'لهستان'],
+      '🇮🇹': ['italy', 'ایتالیا'],
+      '🇪🇸': ['spain', 'اسپانیا'],
+      '🇳🇴': ['norway', 'نروژ'],
+      '🇩🇰': ['denmark', 'دانمارک'],
+      '🇧🇪': ['belgium', 'بلژیک'],
+      '🇦🇹': ['austria', 'اتریش'],
+      '🇷🇴': ['romania', 'رومانی'],
+      '🇨🇿': ['czech', 'جمهوری چک'],
+      '🇭🇰': ['hong kong', 'هنگ کنگ'],
+      '🇰🇷': ['south korea', 'korea', 'کره جنوبی'],
+      '🇧🇷': ['brazil', 'برزیل'],
+      '🇮🇳': ['india', 'هند'],
+      '🇦🇺': ['australia', 'استرالیا'],
+    };
+
+    final name = server.name.toLowerCase();
+    final host = Uri.tryParse(server.link)?.host.toLowerCase() ?? '';
+    final searchable = '$name $host'.replaceAll(RegExp(r'[_]+'), ' ');
+
+    for (final entry in aliases.entries) {
+      for (final alias in entry.value) {
+        // کدهای دوحرفی فقط به‌صورت توکن مستقل یا همراه شماره پذیرفته می‌شوند.
+        final pattern = alias.length == 2
+            ? RegExp('(^|[\\\\s._-])${RegExp.escape(alias)}([\\\\s._-]|[0-9]|$)', caseSensitive: false)
+            : RegExp('(^|[^a-z0-9])${RegExp.escape(alias)}([^a-z0-9]|$)', caseSensitive: false);
+        if (pattern.hasMatch(searchable)) return entry.key;
+      }
+    }
+    return null;
+  }
+
   Widget _buildServerTile(VpnServer server, int index) {
     final isSelected = server.link == _selectedLink;
     final protocol = server.link.split('://').first.toUpperCase();
+    final countryFlag = _countryFlagForServer(server);
 
     return AnimatedOpacity(
       opacity: 1,
@@ -1405,15 +1460,25 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          server.name,
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                server.name,
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (countryFlag != null) ...[
+                              SizedBox(width: 8),
+                              Text(countryFlag, style: TextStyle(fontSize: 19)),
+                            ],
+                          ],
                         ),
                         SizedBox(height: 4),
                         Row(
