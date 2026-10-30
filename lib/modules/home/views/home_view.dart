@@ -120,6 +120,10 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<int> _measureServerPing(VpnServer server) async {
+    if (Platform.isWindows) {
+      // flutter_vless Windows currently does not expose isolated profile delay.
+      return -1;
+    }
     final parsed = FlutterV2ray.parseFromURL(server.link);
     return _v2ray.getServerDelay(
       config: parsed.getFullConfiguration(),
@@ -436,6 +440,7 @@ class _HomeScreenState extends State<HomeScreen>
             debugPrint('WINDOWS VPN STATUS: ${status.state}');
             if (!mounted) return;
             final state = status.connectionState.name;
+            final wasConnected = _connected;
             setState(() {
               _connected = state == 'connected';
               if (_connected) {
@@ -449,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen>
                 _showConnectVideo = false;
               }
             });
-            if (_connected) {
+            if (_connected && !wasConnected) {
               _playConnectVideo();
             }
           },
