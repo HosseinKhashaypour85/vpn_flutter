@@ -96,10 +96,9 @@ class _HomeScreenState extends State<HomeScreen>
 
   Color _pingColor(int? ms) {
     if (ms == null) return AppColors.textMuted;
+    // هر پینگ موفق سبز است؛ فقط خطا یا عدم دسترسی قرمز نمایش داده می‌شود.
     if (ms < 0) return AppColors.red;
-    if (ms <= 150) return AppColors.green;
-    if (ms <= 300) return const Color(0xFFFFC857);
-    return AppColors.red;
+    return AppColors.green;
   }
 
   Future<int> _measureServerPing(VpnServer server) async {
