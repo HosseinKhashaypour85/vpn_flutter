@@ -55,16 +55,17 @@ class AppColors {
       textSecondary = Color(0xFFE0E0E0);
       textMuted = Color(0xFF9E9E9E);
     } else if (mode == 'simurgh') {
-      bg = Color(0xFF130D25);
-      bg2 = Color(0xFF21152F);
-      card = Color(0xFF2B1B39);
-      cardLight = Color(0xFF422747);
-      green = Color(0xFFF28D5B);
-      greenSoft = Color(0xFFBD3C1D);
-      red = Color(0xFFE56B62);
-      textPrimary = Color(0xFFFFF8F0);
-      textSecondary = Color(0xFFF4DCCB);
-      textMuted = Color(0xFFBDA5B8);
+      // تم آتشین سیمرغ: زرشکی عمیق، قرمز و نارنجی درخشان
+      bg = Color(0xFF160709);
+      bg2 = Color(0xFF260B0D);
+      card = Color(0xFF351014);
+      cardLight = Color(0xFF51191A);
+      green = Color(0xFFFF6A2A);
+      greenSoft = Color(0xFFD9361F);
+      red = Color(0xFFFF453A);
+      textPrimary = Color(0xFFFFF5ED);
+      textSecondary = Color(0xFFFFD8C2);
+      textMuted = Color(0xFFC69A8C);
     } else {
       bg = Color(0xFF071219);
       bg2 = Color(0xFF0B2025);
