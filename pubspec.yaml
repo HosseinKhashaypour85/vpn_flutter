@@ -51,6 +51,7 @@ dependencies:
   http: ^1.6.0
   window_manager: ^0.5.2
   device_info_plus: ^13.3.0
+  video_player: ^2.10.1
 
 dev_dependencies:
   flutter_test:
