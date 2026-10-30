@@ -1146,7 +1146,7 @@ class _HomeScreenState extends State<HomeScreen>
                                       1, 0, 0, 0, 0,
                                       0, 1, 0, 0, 0,
                                       0, 0, 1, 0, 0,
-                                      0.333, 0.333, 0.333, 0, -0.10,
+                                      0.2126, 0.7152, 0.0722, 0, -22,
                                     ]),
                                     child: FittedBox(
                                       fit: BoxFit.contain,
