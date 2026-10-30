@@ -240,13 +240,13 @@ class _HomeScreenState extends State<HomeScreen>
         )
         .timeout(const Duration(seconds: 25));
 
-    debugPrint('SUBSCRIPTION HTTP: \${response.statusCode}');
+    debugPrint('SUBSCRIPTION HTTP: ${response.statusCode}');
     debugPrint(
-      'SUBSCRIPTION CONTENT-TYPE: \${response.headers['content-type'] ?? 'unknown'}',
+      'SUBSCRIPTION CONTENT-TYPE: ${response.headers['content-type'] ?? 'unknown'}',
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('سرور اشتراک کد HTTP \${response.statusCode} برگرداند.');
+      throw Exception('سرور اشتراک کد HTTP ${response.statusCode} برگرداند.');
     }
 
     final responseBody =
@@ -319,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       final preview = responseBody.length > 180
-          ? '\${responseBody.substring(0, 180)}...'
+          ? '${responseBody.substring(0, 180)}...'
           : responseBody;
       debugPrint('SUBSCRIPTION BODY PREVIEW: $preview');
       throw FormatException(
@@ -329,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     return List<VpnServer>.generate(links.length, (index) {
       final link = links[index];
-      var name = 'سرور \${index + 1}';
+      var name = 'سرور ${index + 1}';
       try {
         final parsed = FlutterV2ray.parseFromURL(link);
         if (parsed.remark.trim().isNotEmpty) name = parsed.remark.trim();
