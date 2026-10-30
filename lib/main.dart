@@ -11,9 +11,9 @@ Future<void> main() async {
     await windowManager.ensureInitialized();
 
     const windowOptions = WindowOptions(
-      size: Size(390, 844),
-      minimumSize: Size(390, 844),
-      maximumSize: Size(390, 844),
+      size: Size(390, 500),
+      minimumSize: Size(390, 500),
+      maximumSize: Size(390, 500),
       center: true,
       title: 'VPN',
     );

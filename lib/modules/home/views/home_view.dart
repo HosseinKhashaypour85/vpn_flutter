@@ -230,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     final response = await http
-        .get(uri, headers: {'Accept': 'text/plain, */*'})
+        .get(uri, headers: {'Accept': 'text/plain, */*', 'User-Agent': 'v2rayNG/1.9.0'})
         .timeout(Duration(seconds: 25));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
