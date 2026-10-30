@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:video_player/video_player.dart';
 
 class VpnServer {
   VpnServer({
@@ -91,6 +92,8 @@ class _HomeScreenState extends State<HomeScreen>
   final Map<String, int> _serverPings = {};
   final Set<String> _pingingServers = <String>{};
   bool _pingingAll = false;
+  VideoPlayerController? _connectVideoController;
+  bool _showConnectVideo = false;
 
   static const String _pingTestUrl = 'https://www.gstatic.com/generate_204';
 
@@ -199,6 +202,7 @@ class _HomeScreenState extends State<HomeScreen>
       },
     );
     _initializeVpn();
+    _initializeConnectVideo();
     _restoreSavedData();
   }
 
@@ -206,6 +210,7 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _pulseController.dispose();
     _entranceController.dispose();
+    _connectVideoController?.dispose();
     super.dispose();
   }
 
@@ -354,6 +359,54 @@ class _HomeScreenState extends State<HomeScreen>
         Navigator.pop(context, value);
       },
     );
+  }
+
+  Future<void> _initializeConnectVideo() async {
+    final controller = VideoPlayerController.asset(
+      'assets/videos/simurgh_connect.mp4',
+    );
+    _connectVideoController = controller;
+    try {
+      await controller.initialize();
+      await controller.setLooping(false);
+      await controller.setVolume(0);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('SIMURGH VIDEO INIT ERROR: $e');
+      await controller.dispose();
+      if (identical(_connectVideoController, controller)) {
+        _connectVideoController = null;
+      }
+    }
+  }
+
+  Future<void> _playConnectVideo() async {
+    final controller = _connectVideoController;
+    if (controller == null || !controller.value.isInitialized) return;
+    try {
+      await controller.pause();
+      await controller.seekTo(Duration.zero);
+      if (!mounted) return;
+      setState(() => _showConnectVideo = true);
+      await controller.play();
+      controller.addListener(_handleConnectVideoProgress);
+    } catch (e) {
+      debugPrint('SIMURGH VIDEO PLAY ERROR: $e');
+      if (mounted) setState(() => _showConnectVideo = false);
+    }
+  }
+
+  void _handleConnectVideoProgress() {
+    final controller = _connectVideoController;
+    if (controller == null || !controller.value.isInitialized) return;
+    final value = controller.value;
+    if (value.isCompleted ||
+        (value.duration > Duration.zero &&
+            value.position >= value.duration - const Duration(milliseconds: 120))) {
+      controller.removeListener(_handleConnectVideoProgress);
+      controller.pause();
+      if (mounted) setState(() => _showConnectVideo = false);
+    }
   }
 
   Future<void> _initializeVpn() async {
@@ -687,6 +740,8 @@ class _HomeScreenState extends State<HomeScreen>
         if (!mounted) return;
         setState(() {
           _connected = false;
+          _showConnectVideo = false;
+          _connectVideoController?.pause();
           _status = 'اتصال قطع شد';
         });
         return;
@@ -723,6 +778,7 @@ class _HomeScreenState extends State<HomeScreen>
         _connected = true;
         _status = 'درخواست اتصال ارسال شد؛ لاگ موتور را بررسی کن';
       });
+      await _playConnectVideo();
     } catch (e, st) {
       debugPrint('VPN CONNECT ERROR: $e');
       debugPrintStack(stackTrace: st);
@@ -1077,25 +1133,50 @@ class _HomeScreenState extends State<HomeScreen>
                         curve: Curves.easeOutBack,
                         scale: _connected ? 1 : 0.55,
                         child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.green.withValues(
-                                    alpha: _connected ? 0.22 : 0,
+                          child: _showConnectVideo &&
+                                  _connectVideoController != null &&
+                                  _connectVideoController!.value.isInitialized
+                              ? SizedBox(
+                                  width: 250,
+                                  height: 180,
+                                  child: ColorFiltered(
+                                    // ویدیوی مشکی را با آلفای مبتنی بر روشنایی ترکیب می‌کنیم
+                                    // تا فقط نور و پرهای سیمرغ روی UI دیده شوند.
+                                    colorFilter: const ColorFilter.matrix([
+                                      1, 0, 0, 0, 0,
+                                      0, 1, 0, 0, 0,
+                                      0, 0, 1, 0, 0,
+                                      0.333, 0.333, 0.333, 0, -0.10,
+                                    ]),
+                                    child: FittedBox(
+                                      fit: BoxFit.contain,
+                                      child: SizedBox(
+                                        width: _connectVideoController!.value.size.width,
+                                        height: _connectVideoController!.value.size.height,
+                                        child: VideoPlayer(_connectVideoController!),
+                                      ),
+                                    ),
                                   ),
-                                  blurRadius: 48,
-                                  spreadRadius: 8,
+                                )
+                              : Container(
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.green.withValues(
+                                          alpha: _connected ? 0.22 : 0,
+                                        ),
+                                        blurRadius: 48,
+                                        spreadRadius: 8,
+                                      ),
+                                    ],
+                                  ),
+                                  child: SimurghMark(
+                                    size: 112,
+                                    color: AppColors.green,
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: SimurghMark(
-                              size: 112,
-                              color: AppColors.green,
-                            ),
-                          ),
                         ),
                       ),
                     ),
