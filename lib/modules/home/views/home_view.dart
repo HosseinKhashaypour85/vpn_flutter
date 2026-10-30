@@ -1443,16 +1443,21 @@ class _HomeScreenState extends State<HomeScreen>
                       borderRadius: BorderRadius.circular(13),
                     ),
                     child: Center(
-                      child: Text(
-                        protocol.substring(0, 2),
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.textSecondary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: countryFlag != null
+                          ? Text(
+                              countryFlag,
+                              style: const TextStyle(fontSize: 25),
+                            )
+                          : Text(
+                              protocol.substring(0, 2),
+                              style: TextStyle(
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.textSecondary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                   SizedBox(width: 14),
