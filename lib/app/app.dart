@@ -12,7 +12,7 @@ class VpnApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'VPN',
+      title: 'سیمرغ VPN',
       debugShowCheckedModeBanner: false,
       initialBinding: InitialBinding(),
       initialRoute: AppRoutes.splash,

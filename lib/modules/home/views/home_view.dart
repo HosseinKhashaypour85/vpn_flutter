@@ -19,12 +19,12 @@ class VpnServer {
 
 // ---- پالت رنگی متمرکز برای هماهنگی کامل ----
 class AppColors {
-  static Color bg = Color(0xFF070B14);
-  static Color bg2 = Color(0xFF0E1626);
-  static Color card = Color(0xFF131E33);
-  static Color cardLight = Color(0xFF1B2942);
-  static Color green = Color(0xFF19C795);
-  static Color greenSoft = Color(0xFF0F7A5C);
+  static Color bg = Color(0xFF071219);
+  static Color bg2 = Color(0xFF0B2025);
+  static Color card = Color(0xFF102B30);
+  static Color cardLight = Color(0xFF194047);
+  static Color green = Color(0xFF28D6A3);
+  static Color greenSoft = Color(0xFF0C8A78);
   static Color red = Color(0xFFEF5350);
   static Color textPrimary = Colors.white;
   static Color textSecondary = Color(0xB3FFFFFF);
@@ -32,12 +32,12 @@ class AppColors {
 
   static void applyTheme(String mode) {
     if (mode == 'light') {
-      bg = Color(0xFFF4F6F8);
-      bg2 = Color(0xFFE9EDF1);
+      bg = Color(0xFFF2F7F5);
+      bg2 = Color(0xFFE5F0EC);
       card = Colors.white;
       cardLight = Color(0xFFE4E9EE);
-      green = Color(0xFF10706B);
-      greenSoft = Color(0xFF0B5753);
+      green = Color(0xFF087F70);
+      greenSoft = Color(0xFF075B56);
       red = Color(0xFFD84343);
       textPrimary = Color(0xFF17212B);
       textSecondary = Color(0xFF46515C);
@@ -54,12 +54,12 @@ class AppColors {
       textSecondary = Color(0xFFE0E0E0);
       textMuted = Color(0xFF9E9E9E);
     } else {
-      bg = Color(0xFF070B14);
-      bg2 = Color(0xFF0E1626);
-      card = Color(0xFF131E33);
-      cardLight = Color(0xFF1B2942);
-      green = Color(0xFF19C795);
-      greenSoft = Color(0xFF0F7A5C);
+      bg = Color(0xFF071219);
+      bg2 = Color(0xFF0B2025);
+      card = Color(0xFF102B30);
+      cardLight = Color(0xFF194047);
+      green = Color(0xFF28D6A3);
+      greenSoft = Color(0xFF0C8A78);
       red = Color(0xFFEF5350);
       textPrimary = Colors.white;
       textSecondary = Color(0xB3FFFFFF);
@@ -705,8 +705,7 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                         ],
                       ),
-                      child: Icon(Icons.shield_rounded,
-                          color: Colors.white, size: 26),
+                      child: SimurghMark(size: 34, color: Colors.white),
                     ),
                     SizedBox(width: 14),
                     Expanded(
@@ -714,17 +713,18 @@ class _HomeScreenState extends State<HomeScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Secure VPN',
+                            'سیمرغ VPN',
                             style: TextStyle(
                               color: AppColors.textPrimary,
-                              fontSize: 22,
+                              fontSize: 23,
+                              fontFamily: 'kalameh',
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3,
+                              letterSpacing: 0.2,
                             ),
                           ),
                           SizedBox(height: 3),
                           Text(
-                            'اتصال امن و خصوصی',
+                            'اتصال امن، آزاد و پایدار',
                             style: TextStyle(
                               color: AppColors.textMuted,
                               fontSize: 12,
@@ -917,7 +917,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 SizedBox(width: 8),
                 Text(
-                  _connected ? 'متصل' : 'قطع',
+                  _connected ? 'محافظت فعال' : 'آماده اتصال',
                   style: TextStyle(
                     color: _connected
                         ? AppColors.green
@@ -1029,8 +1029,8 @@ class _HomeScreenState extends State<HomeScreen>
 
           Text(
             _connected
-                ? 'اتصال برقرار است'
-                : (_connecting ? 'در حال اتصال...' : 'برای اتصال ضربه بزنید'),
+                ? 'سیمرغ از اتصال شما محافظت می‌کند'
+                : (_connecting ? 'در حال برقراری اتصال...' : 'برای فعال‌سازی محافظت ضربه بزنید'),
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
@@ -1262,6 +1262,100 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+}
+
+
+/// نشان اختصاصی سیمرغ؛ نماد پرواز، آزادی و محافظت.
+class SimurghMark extends StatelessWidget {
+  const SimurghMark({
+    super.key,
+    this.size = 48,
+    this.color = const Color(0xFF28D6A3),
+  });
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _SimurghPainter(color),
+      ),
+    );
+  }
+}
+
+class _SimurghPainter extends CustomPainter {
+  _SimurghPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    final path = Path()
+      // بال چپ
+      ..moveTo(size.width * .50, size.height * .20)
+      ..cubicTo(size.width * .39, size.height * .16,
+          size.width * .22, size.height * .12,
+          size.width * .07, size.height * .27)
+      ..cubicTo(size.width * .13, size.height * .31,
+          size.width * .20, size.height * .39,
+          size.width * .25, size.height * .52)
+      ..cubicTo(size.width * .32, size.height * .47,
+          size.width * .39, size.height * .48,
+          size.width * .46, size.height * .62)
+      // دم و تنه
+      ..cubicTo(size.width * .45, size.height * .75,
+          size.width * .48, size.height * .85,
+          size.width * .50, size.height * .91)
+      ..cubicTo(size.width * .52, size.height * .85,
+          size.width * .55, size.height * .75,
+          size.width * .54, size.height * .62)
+      // بال راست
+      ..cubicTo(size.width * .61, size.height * .48,
+          size.width * .68, size.height * .47,
+          size.width * .75, size.height * .52)
+      ..cubicTo(size.width * .80, size.height * .39,
+          size.width * .87, size.height * .31,
+          size.width * .93, size.height * .27)
+      ..cubicTo(size.width * .78, size.height * .12,
+          size.width * .61, size.height * .16,
+          size.width * .50, size.height * .20)
+      ..close();
+
+    canvas.drawPath(path, paint);
+
+    final inner = Paint()
+      ..color = color.withValues(alpha: .72)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * .035
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
+
+    final feather = Path()
+      ..moveTo(size.width * .17, size.height * .31)
+      ..quadraticBezierTo(size.width * .31, size.height * .29,
+          size.width * .43, size.height * .53)
+      ..moveTo(size.width * .83, size.height * .31)
+      ..quadraticBezierTo(size.width * .69, size.height * .29,
+          size.width * .57, size.height * .53)
+      ..moveTo(size.width * .50, size.height * .27)
+      ..lineTo(size.width * .50, size.height * .77);
+
+    canvas.drawPath(feather, inner);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SimurghPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 // ---------- دکمه گرد هدر ----------
