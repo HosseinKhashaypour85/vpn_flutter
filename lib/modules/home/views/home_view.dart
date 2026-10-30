@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:flutter_vless/flutter_vless.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
@@ -91,6 +93,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with TickerProviderStateMixin {
   late final FlutterV2ray _v2ray;
+  FlutterVless? _windowsVless;
   final List<String> _subscriptions = [];
   final List<VpnServer> _servers = [];
 
@@ -427,14 +430,44 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _initializeVpn() async {
     try {
-      await _v2ray.initializeV2Ray();
+      if (Platform.isWindows) {
+        final windowsVless = FlutterVless(
+          onStatusChanged: (status) {
+            debugPrint('WINDOWS VPN STATUS: ${status.state}');
+            if (!mounted) return;
+            final state = status.connectionState.name;
+            setState(() {
+              _connected = state == 'connected';
+              if (_connected) {
+                _connecting = false;
+                _status = 'تونل امن سیمرغ فعال است';
+              } else if (state == 'connecting') {
+                _status = 'در حال ایجاد تونل امن...';
+              } else if (state == 'disconnected') {
+                _connecting = false;
+                _status = 'اتصال قطع شد';
+                _showConnectVideo = false;
+              }
+            });
+            if (_connected) {
+              _playConnectVideo();
+            }
+          },
+        );
+        await windowsVless.initializeVless();
+        _windowsVless = windowsVless;
+      } else {
+        await _v2ray.initializeV2Ray();
+      }
       if (!mounted) return;
       setState(() {
         _initialized = true;
-        _status = 'آماده اتصال';
+        _status = Platform.isWindows
+            ? 'موتور ویندوز آماده است؛ برای تونل کامل با دسترسی مدیر اجرا کن'
+            : 'آماده اتصال';
       });
     } catch (e, st) {
-      debugPrint('V2RAY INIT ERROR: $e');
+      debugPrint('VPN INIT ERROR: $e');
       debugPrintStack(stackTrace: st);
       if (!mounted) return;
       setState(() => _status = 'راه‌اندازی موتور VPN ناموفق بود');
@@ -752,7 +785,11 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() => _connecting = true);
     try {
       if (_connected) {
-        await _v2ray.stopV2Ray();
+        if (Platform.isWindows) {
+          await _windowsVless?.stopVless();
+        } else {
+          await _v2ray.stopV2Ray();
+        }
         if (!mounted) return;
         setState(() {
           _connected = false;
@@ -776,25 +813,44 @@ class _HomeScreenState extends State<HomeScreen>
       debugPrint('VPN CONNECT: selected server = ${server.name}');
       debugPrint('VPN CONNECT: protocol = ${server.link.split('://').first}');
 
-      final hasPermission = await _v2ray.requestPermission();
-      if (!hasPermission) {
-        throw Exception('مجوز اتصال VPN صادر نشد');
+      final config = parsed.getFullConfiguration();
+      final remark = parsed.remark.isEmpty ? server.name : parsed.remark;
+
+      if (Platform.isWindows) {
+        final windowsVless = _windowsVless;
+        if (windowsVless == null) {
+          throw StateError('موتور VPN ویندوز آماده نیست');
+        }
+        if (!await windowsVless.requestPermission()) {
+          throw Exception('برای ایجاد تونل کامل، برنامه را با دسترسی Administrator اجرا کن');
+        }
+        setState(() => _status = 'در حال راه‌اندازی تونل کامل ویندوز...');
+        await windowsVless.startVless(
+          remark: remark,
+          config: config,
+          proxyOnly: false,
+        );
+        if (!mounted) return;
+        setState(() => _status = 'درخواست تونل ثبت شد؛ در انتظار تأیید مسیر امن...');
+      } else {
+        final hasPermission = await _v2ray.requestPermission();
+        if (!hasPermission) {
+          throw Exception('مجوز اتصال VPN صادر نشد');
+        }
+        await _v2ray.startV2Ray(
+          remark: remark,
+          config: config,
+          blockedApps: null,
+          bypassSubnets: null,
+          proxyOnly: false,
+        );
+        if (!mounted) return;
+        setState(() {
+          _connected = true;
+          _status = 'درخواست اتصال ارسال شد؛ لاگ موتور را بررسی کن';
+        });
+        await _playConnectVideo();
       }
-
-      await _v2ray.startV2Ray(
-        remark: parsed.remark.isEmpty ? server.name : parsed.remark,
-        config: parsed.getFullConfiguration(),
-        blockedApps: null,
-        bypassSubnets: null,
-        proxyOnly: false,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _connected = true;
-        _status = 'درخواست اتصال ارسال شد؛ لاگ موتور را بررسی کن';
-      });
-      await _playConnectVideo();
     } catch (e, st) {
       debugPrint('VPN CONNECT ERROR: $e');
       debugPrintStack(stackTrace: st);
