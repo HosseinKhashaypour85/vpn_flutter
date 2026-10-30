@@ -1054,14 +1054,65 @@ class _HomeScreenState extends State<HomeScreen>
           ),
           SizedBox(height: 22),
 
-          // دکمه اتصال با پالس
+          // صحنه پرواز سیمرغ؛ پس از اتصال از مرکز به سمت بالا اوج می‌گیرد.
           SizedBox(
-            width: 190,
-            height: 190,
+            height: 285,
+            width: double.infinity,
             child: Stack(
-              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              alignment: Alignment.bottomCenter,
               children: [
-                if (_connected)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 1150),
+                  curve: Curves.easeOutCubic,
+                  top: _connected ? 0 : 125,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 650),
+                      curve: Curves.easeOut,
+                      opacity: _connected ? 1 : 0,
+                      child: AnimatedScale(
+                        duration: const Duration(milliseconds: 1150),
+                        curve: Curves.easeOutBack,
+                        scale: _connected ? 1 : 0.55,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.green.withValues(
+                                    alpha: _connected ? 0.22 : 0,
+                                  ),
+                                  blurRadius: 48,
+                                  spreadRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: SimurghMark(
+                              size: 112,
+                              color: AppColors.green,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // دکمه اتصال با پالس
+                Positioned(
+                  bottom: 0,
+                  child: SizedBox(
+                    width: 190,
+                    height: 190,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (_connected)
                   ...List.generate(2, (i) {
                     return AnimatedBuilder(
                       animation: _pulseController,
@@ -1142,6 +1193,10 @@ class _HomeScreenState extends State<HomeScreen>
                             ? Colors.white
                             : AppColors.textSecondary,
                       ),
+                    ),
+                  ),
+                ),
+                      ],
                     ),
                   ),
                 ),
