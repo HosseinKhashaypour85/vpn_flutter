@@ -1337,7 +1337,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   String? _countryFlagForServer(VpnServer server) {
     // اگر خود نام سرور از قبل ایموجی پرچم داشته باشد، همان را حفظ کن.
-    final existingFlag = RegExp(r'[\\u{1F1E6}-\\u{1F1FF}]{2}', unicode: true)
+    final existingFlag = RegExp(r'[\u{1F1E6}-\u{1F1FF}]{2}', unicode: true)
         .firstMatch(server.name);
     if (existingFlag != null) return existingFlag.group(0);
 
